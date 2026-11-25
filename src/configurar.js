@@ -23,4 +23,4 @@ if (!numero || !afiliado) {
 }
 
 salvarEnv({ WHATS_NUMERO: numero, AFILIADO_PARAMS: afiliado });
-console.log('\n✅ Configuração salva! Próximo passo: npm run parear\n');
+console.log('\n✅ Configuração salva! Próximo passo: npm run cookie\n');

@@ -99,9 +99,17 @@ function lerCartao(trecho) {
 
 async function lerPagina(numero) {
   const url = numero > 1 ? `${PAGINA_OFERTAS}?page=${numero}` : PAGINA_OFERTAS;
-  const resposta = await fetch(url, { headers: CABECALHOS, redirect: 'follow' });
+  const cookie = process.env.ML_COOKIE?.trim();
+  const resposta = await fetch(url, { headers: cookie ? { ...CABECALHOS, Cookie: cookie } : CABECALHOS, redirect: 'follow' });
   const html = await resposta.text();
   if (!resposta.ok) throw new Error(`Página ${numero} respondeu ${resposta.status}`);
+  if (/account-verification|\/jms\/.*\/login/.test(resposta.url)) {
+    throw new Error(
+      cookie
+        ? 'O Mercado Livre pediu login de novo: o cookie expirou ou não foi aceito. Rode: npm run cookie'
+        : 'O Mercado Livre pediu login. Cadastre seu cookie de login com: npm run cookie',
+    );
+  }
 
   const cartoes = html.split(/<div[^>]+class="[^"]*\bpoly-card\b/).slice(1).map(lerCartao).filter(Boolean);
   if (!cartoes.length) {

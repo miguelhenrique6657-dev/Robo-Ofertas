@@ -6,6 +6,7 @@
   "description": "Robô que acha ofertas no Mercado Livre e posta no grupo de WhatsApp com link de afiliado",
   "scripts": {
     "configurar": "node src/configurar.js",
+    "cookie": "node src/cookie.js",
     "parear": "node --env-file=.env src/index.js parear",
     "grupos": "node --env-file=.env src/index.js listar-grupos",
     "testar": "node --env-file=.env src/index.js testar",
