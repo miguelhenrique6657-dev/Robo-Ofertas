@@ -1,0 +1,16 @@
+{
+  "name": "robo-ofertas",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Robô que acha ofertas no Mercado Livre e posta no grupo de WhatsApp com link de afiliado",
+  "scripts": {
+    "postar": "node src/index.js postar",
+    "testar": "node src/index.js testar"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "pino": "^9.0.0"
+  }
+}
