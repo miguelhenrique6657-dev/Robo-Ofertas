@@ -1,14 +1,18 @@
 {
   "name": "robo-ofertas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Robô que acha ofertas no Mercado Livre e posta no grupo de WhatsApp com link de afiliado",
   "scripts": {
-    "postar": "node src/index.js postar",
-    "testar": "node src/index.js testar"
+    "configurar": "node src/configurar.js",
+    "parear": "node --env-file=.env src/index.js parear",
+    "grupos": "node --env-file=.env src/index.js listar-grupos",
+    "testar": "node --env-file=.env src/index.js testar",
+    "postar": "node --env-file=.env src/index.js postar",
+    "start": "(termux-wake-lock || true) && node src/sempre.js"
   },
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.6" },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.0",
     "pino": "^9.0.0"

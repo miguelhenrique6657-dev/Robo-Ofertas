@@ -7,7 +7,7 @@ const modo = process.argv[2] || 'postar';
 async function modoParear() {
   const { conectar } = await import('./whatsapp.js');
   const sock = await conectar({ numeroParaParear: env('WHATS_NUMERO') });
-  console.log('✅ WhatsApp conectado! Agora rode o modo "listar-grupos".');
+  console.log('✅ WhatsApp conectado! Agora rode: npm run grupos');
   await esperar(15000); // tempo para salvar a sessão
   sock.end(undefined);
 }
@@ -16,10 +16,20 @@ async function modoListarGrupos() {
   const { conectar } = await import('./whatsapp.js');
   const sock = await conectar();
   const grupos = await sock.groupFetchAllParticipating();
-  console.log('\nGrupos do robô (copie o código do seu grupo para o segredo GRUPO_ID):\n');
-  for (const grupo of Object.values(grupos)) console.log(`• ${grupo.subject}  →  ${grupo.id}`);
+  const lista = Object.values(grupos);
   await esperar(3000);
   sock.end(undefined);
+  if (!lista.length) throw new Error('O número do robô não está em nenhum grupo. Adicione ele no grupo e rode de novo.');
+
+  console.log('\nGrupos do robô:\n');
+  lista.forEach((grupo, i) => console.log(`  ${i + 1}) ${grupo.subject}`));
+  const { fecharPerguntas, perguntar, salvarEnv } = await import('./env.js');
+  const escolha = Number(await perguntar('\nDigite o número do grupo onde o robô vai postar: '));
+  fecharPerguntas();
+  const grupo = lista[escolha - 1];
+  if (!grupo) throw new Error('Número inválido. Rode de novo: npm run grupos');
+  salvarEnv({ GRUPO_ID: grupo.id });
+  console.log(`✅ Grupo escolhido: ${grupo.subject}`);
 }
 
 async function modoTestar() {

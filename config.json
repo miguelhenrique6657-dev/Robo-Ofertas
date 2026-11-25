@@ -1,4 +1,7 @@
 {
+  "hora_inicio": 8,
+  "hora_fim": 23,
+  "minutos_entre_rodadas": 60,
   "paginas_de_ofertas": 3,
   "desconto_minimo": 30,
   "preco_minimo": 20,

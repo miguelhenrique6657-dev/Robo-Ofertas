@@ -16,7 +16,7 @@ export async function conectar({ numeroParaParear } = {}) {
   const { version } = await fetchLatestBaileysVersion();
 
   if (!numeroParaParear && !state.creds.registered) {
-    throw new Error('WhatsApp ainda não pareado. Rode o modo "parear" (veja o LEIAME).');
+    throw new Error('WhatsApp ainda não pareado. Rode: npm run parear');
   }
 
   return new Promise((resolve, reject) => {
@@ -57,7 +57,7 @@ export async function conectar({ numeroParaParear } = {}) {
 
         const motivo = lastDisconnect?.error?.output?.statusCode;
         if (motivo === DisconnectReason.loggedOut) {
-          return reject(new Error('O WhatsApp foi desconectado. Rode o modo "parear" de novo.'));
+          return reject(new Error('O WhatsApp foi desconectado. Rode de novo: npm run parear'));
         }
         if (++tentativas > 5) return reject(new Error(`Não consegui conectar no WhatsApp (código ${motivo}).`));
         setTimeout(iniciar, 2000); // depois do pareamento o WhatsApp pede para reconectar; é normal
