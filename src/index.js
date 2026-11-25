@@ -1,13 +1,8 @@
 import { config, env, esperar, lerJson, salvarJson } from './config.js';
-import { autorizar, buscarOfertas, linkAfiliado } from './mercadolivre.js';
+import { buscarOfertas, linkAfiliado } from './mercadolivre.js';
 import { montarPost } from './post.js';
 
 const modo = process.argv[2] || 'postar';
-
-async function modoAutorizarML() {
-  await autorizar(env('CODIGO'));
-  console.log('✅ Mercado Livre autorizado! O robô já consegue buscar ofertas.');
-}
 
 async function modoParear() {
   const { conectar } = await import('./whatsapp.js');
@@ -31,6 +26,7 @@ async function modoTestar() {
   const ofertas = await buscarOfertas();
   console.log(`\n${ofertas.length} oferta(s) encontradas. As 3 primeiras ficariam assim:\n`);
   for (const oferta of ofertas.slice(0, 3)) {
+    console.log(`[foto] ${oferta.imagem}`);
     console.log(montarPost({ ...oferta, link: linkAfiliado(oferta.link) }));
     console.log('\n----------------------------\n');
   }
@@ -58,6 +54,7 @@ async function modoPostar() {
   for (const [i, oferta] of ofertas.entries()) {
     const texto = montarPost({ ...oferta, link: linkAfiliado(oferta.link) });
     try {
+      if (!oferta.imagem) throw new Error('sem foto');
       await sock.sendMessage(grupo, { image: { url: oferta.imagem }, caption: texto });
     } catch {
       await sock.sendMessage(grupo, { text: texto }); // se a foto falhar, manda só o texto
@@ -73,7 +70,6 @@ async function modoPostar() {
 }
 
 const modos = {
-  'ml-autorizar': modoAutorizarML,
   parear: modoParear,
   'listar-grupos': modoListarGrupos,
   testar: modoTestar,

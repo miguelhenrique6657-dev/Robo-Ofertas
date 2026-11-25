@@ -13,12 +13,8 @@ on:
         options:
           - postar
           - testar
-          - ml-autorizar
           - parear
           - listar-grupos
-      codigo:
-        description: 'Só para ml-autorizar: o código (TG-...) que apareceu no endereço'
-        required: false
 
 concurrency:
   group: robo-ofertas
@@ -39,7 +35,7 @@ jobs:
 
       - run: npm install --no-audit --no-fund
 
-      # Recupera sessão do WhatsApp, token do ML e lista de ofertas já postadas
+      # Recupera sessão do WhatsApp e lista de ofertas já postadas
       - uses: actions/cache/restore@v4
         with:
           path: dados
@@ -49,10 +45,6 @@ jobs:
       - name: Rodar robô
         run: node src/index.js "${{ inputs.modo || 'postar' }}"
         env:
-          CODIGO: ${{ inputs.codigo }}
-          ML_CLIENT_ID: ${{ secrets.ML_CLIENT_ID }}
-          ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
-          ML_REDIRECT_URI: ${{ secrets.ML_REDIRECT_URI }}
           WHATS_NUMERO: ${{ secrets.WHATS_NUMERO }}
           GRUPO_ID: ${{ secrets.GRUPO_ID }}
           AFILIADO_PARAMS: ${{ secrets.AFILIADO_PARAMS }}

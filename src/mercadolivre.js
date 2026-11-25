@@ -1,46 +1,14 @@
-import { config, env, lerJson, salvarJson } from './config.js';
+import { config, env } from './config.js';
 
-const API = 'https://api.mercadolibre.com';
+// O robô lê a página pública "Ofertas do dia" do Mercado Livre (não precisa de aplicação/API).
+const PAGINA_OFERTAS = 'https://www.mercadolivre.com.br/ofertas';
 
-// ---------- Token (o Mercado Livre troca o refresh_token a cada uso, então ele fica salvo em dados/) ----------
-
-async function pedirToken(params) {
-  const corpo = new URLSearchParams({
-    client_id: env('ML_CLIENT_ID'),
-    client_secret: env('ML_CLIENT_SECRET'),
-    ...params,
-  });
-  const resposta = await fetch(`${API}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-    body: corpo,
-  });
-  const dados = await resposta.json();
-  if (!resposta.ok) throw new Error(`Mercado Livre recusou o token: ${JSON.stringify(dados)}`);
-
-  salvarJson('ml-token.json', {
-    access_token: dados.access_token,
-    refresh_token: dados.refresh_token,
-    expira_em: Date.now() + (dados.expires_in - 300) * 1000,
-  });
-  return dados.access_token;
-}
-
-export const autorizar = (codigo) =>
-  pedirToken({ grant_type: 'authorization_code', code: codigo, redirect_uri: env('ML_REDIRECT_URI') });
-
-async function token() {
-  const salvo = lerJson('ml-token.json', null);
-  if (!salvo) throw new Error('Mercado Livre ainda não autorizado. Rode o modo "ml-autorizar" (veja o LEIAME).');
-  if (Date.now() < salvo.expira_em) return salvo.access_token;
-  return pedirToken({ grant_type: 'refresh_token', refresh_token: salvo.refresh_token });
-}
-
-async function get(caminho) {
-  const resposta = await fetch(API + caminho, { headers: { Authorization: `Bearer ${await token()}` } });
-  if (!resposta.ok) throw new Error(`Erro ${resposta.status} em ${caminho}: ${await resposta.text()}`);
-  return resposta.json();
-}
+const CABECALHOS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+  'Accept-Language': 'pt-BR,pt;q=0.9',
+  Accept: 'text/html,application/xhtml+xml',
+};
 
 // ---------- Link de afiliado ----------
 // Coloca os parâmetros da sua conta de afiliado (AFILIADO_PARAMS) no link do produto.
@@ -51,61 +19,139 @@ export function linkAfiliado(permalink) {
   return url.toString();
 }
 
-// ---------- Busca e avaliação das ofertas ----------
+// ---------- Leitura da página ----------
 
-const imagemGrande = (url = '') =>
-  url.replace(/^http:/, 'https:').replace(/-[A-Z]\.(jpg|webp)$/, '-O.$1');
+const decodificar = (texto = '') =>
+  texto
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-function avaliar(item) {
-  const precoAntigo = item.original_price;
-  const preco = item.price;
-  if (!precoAntigo || precoAntigo <= preco) return null;
-  if (item.condition && item.condition !== 'new') return null;
+// "199 reais com 90 centavos" -> 199.9
+function valorDoAriaLabel(trecho, prefixo) {
+  const m = trecho.match(new RegExp(`aria-label="${prefixo}:?\\s*([\\d.]+) reais(?: com (\\d+) centavos)?`, 'i'));
+  if (!m) return null;
+  return Number(m[1].replace(/\./g, '')) + (m[2] ? Number(m[2]) / 100 : 0);
+}
+
+// Plano B: lê os números de dentro do bloco de preço
+function valorDoBloco(bloco) {
+  if (!bloco) return null;
+  const inteiro = bloco.match(/andes-money-amount__fraction[^>]*>([\d.]+)</);
+  if (!inteiro) return null;
+  const centavos = bloco.match(/andes-money-amount__cents[^>]*>(\d+)</);
+  return Number(inteiro[1].replace(/\./g, '')) + (centavos ? Number(centavos[1]) / 100 : 0);
+}
+
+function limparLink(href) {
+  try {
+    const url = new URL(decodificar(href));
+    if (!/(^|\.)mercadolivre\.com\.br$/.test(url.hostname) || url.hostname.startsWith('click')) return null;
+    url.hash = '';
+    url.search = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function imagemBoa(trecho) {
+  const tag = trecho.match(/<img[^>]+>/)?.[0] ?? '';
+  const src = tag.match(/data-src="([^"]+)"/)?.[1] ?? tag.match(/\ssrc="([^"]+)"/)?.[1] ?? '';
+  if (!src || src.startsWith('data:')) return null;
+  return decodificar(src).replace(/-[A-Z]\.(webp|jpg|png)$/, '-O.jpg');
+}
+
+function lerCartao(trecho) {
+  const linkTitulo =
+    trecho.match(/<a[^>]+href="([^"]+)"[^>]*class="[^"]*poly-component__title[^"]*"[^>]*>([\s\S]*?)<\/a>/) ??
+    trecho.match(/<a[^>]+class="[^"]*poly-component__title[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+  if (!linkTitulo) return null;
+
+  const link = limparLink(linkTitulo[1]);
+  const titulo = decodificar(linkTitulo[2]);
+  if (!link || !titulo) return null;
+
+  const precoAntigo =
+    valorDoAriaLabel(trecho, 'Antes') ??
+    valorDoBloco(trecho.match(/andes-money-amount--previous[\s\S]*?<\/s>/)?.[0]);
+  const preco =
+    valorDoAriaLabel(trecho, 'Agora') ??
+    valorDoBloco(trecho.match(/poly-price__current[\s\S]*?andes-money-amount__fraction[\s\S]*?<\/span>[\s\S]*?<\/span>/)?.[0]);
+
+  const id = link.match(/MLB-?\d+/i)?.[0].replace('-', '').toUpperCase() ?? link;
+
+  return {
+    id,
+    titulo,
+    precoAntigo,
+    preco,
+    freteGratis: /frete gr[aá]tis/i.test(trecho),
+    imagem: imagemBoa(trecho),
+    link,
+  };
+}
+
+async function lerPagina(numero) {
+  const url = numero > 1 ? `${PAGINA_OFERTAS}?page=${numero}` : PAGINA_OFERTAS;
+  const resposta = await fetch(url, { headers: CABECALHOS, redirect: 'follow' });
+  const html = await resposta.text();
+  if (!resposta.ok) throw new Error(`Página ${numero} respondeu ${resposta.status}`);
+
+  const cartoes = html.split(/<div[^>]+class="[^"]*\bpoly-card\b/).slice(1).map(lerCartao).filter(Boolean);
+  if (!cartoes.length) {
+    console.warn(
+      `⚠️ Página ${numero}: nenhum produto reconhecido (${html.length} caracteres, endereço final: ${resposta.url}).` +
+        ' Se isso continuar, mande este log para ajustar o robô.',
+    );
+  }
+  return cartoes;
+}
+
+// ---------- Avaliação das ofertas ----------
+
+function aprovar(oferta) {
+  const { precoAntigo, preco } = oferta;
+  if (!preco || !precoAntigo || precoAntigo <= preco) return null;
 
   const desconto = Math.round((1 - preco / precoAntigo) * 100);
-  const freteGratis = Boolean(item.shipping?.free_shipping);
+  const titulo = oferta.titulo.toLowerCase();
 
   if (desconto < config.desconto_minimo) return null;
   if (preco < (config.preco_minimo ?? 0) || preco > (config.preco_maximo ?? Infinity)) return null;
-  if (config.frete_gratis_obrigatorio && !freteGratis) return null;
-
-  return {
-    id: item.id,
-    titulo: item.title,
-    precoAntigo,
-    preco,
-    desconto,
-    freteGratis,
-    imagem: imagemGrande(item.thumbnail),
-    link: item.permalink,
-  };
+  if (config.frete_gratis_obrigatorio && !oferta.freteGratis) return null;
+  if ((config.palavras_bloqueadas ?? []).some((p) => titulo.includes(p.toLowerCase()))) return null;
+  if (config.palavras_obrigatorias?.length && !config.palavras_obrigatorias.some((p) => titulo.includes(p.toLowerCase()))) {
+    return null;
+  }
+  return { ...oferta, desconto };
 }
 
 export async function buscarOfertas() {
   const achados = new Map();
 
-  for (const busca of config.buscas) {
-    const params = new URLSearchParams({ limit: '50', condition: 'new' });
-    if (busca.categoria) params.set('category', busca.categoria);
-    if (busca.palavra) params.set('q', busca.palavra);
-    const nome = busca.nome || busca.palavra || busca.categoria;
-
+  for (let pagina = 1; pagina <= (config.paginas_de_ofertas ?? 3); pagina++) {
     try {
-      const dados = await get(`/sites/MLB/search?${params}`);
-      let quantos = 0;
-      for (const item of dados.results ?? []) {
-        const oferta = avaliar(item);
+      const cartoes = await lerPagina(pagina);
+      let aprovados = 0;
+      for (const cartao of cartoes) {
+        const oferta = aprovar(cartao);
         if (oferta) {
           achados.set(oferta.id, oferta);
-          quantos++;
+          aprovados++;
         }
       }
-      console.log(`🔎 ${nome}: ${quantos} oferta(s) aprovada(s)`);
+      console.log(`🔎 Página ${pagina}: ${cartoes.length} produtos lidos, ${aprovados} aprovados`);
     } catch (erro) {
-      console.warn(`⚠️ Busca "${nome}" falhou: ${erro.message}`);
+      console.warn(`⚠️ ${erro.message}`);
     }
+    await new Promise((r) => setTimeout(r, 2000)); // calma entre uma página e outra
   }
 
-  // Maiores descontos primeiro
   return [...achados.values()].sort((a, b) => b.desconto - a.desconto);
 }

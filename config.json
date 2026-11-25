@@ -1,17 +1,11 @@
 {
-  "buscas": [
-    { "palavra": "fone bluetooth" },
-    { "palavra": "air fryer" },
-    { "palavra": "smartwatch" },
-    { "categoria": "MLB1051", "nome": "Celulares" },
-    { "categoria": "MLB1648", "nome": "Informática" },
-    { "categoria": "MLB1574", "nome": "Casa e Decoração" },
-    { "categoria": "MLB1246", "nome": "Beleza" }
-  ],
+  "paginas_de_ofertas": 3,
   "desconto_minimo": 30,
   "preco_minimo": 20,
   "preco_maximo": 3000,
   "frete_gratis_obrigatorio": false,
+  "palavras_obrigatorias": [],
+  "palavras_bloqueadas": ["usado", "recondicionado"],
   "max_posts_por_rodada": 3,
   "segundos_entre_posts": 40,
   "repostar_depois_de_dias": 7
